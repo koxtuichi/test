@@ -1,4 +1,6 @@
 const SECTION_HEADING = "## 変更ファイル一覧（自動更新）";
+const LEGACY_START_MARKER = "<!-- pr-file-impact-summary:start -->";
+const LEGACY_END_MARKER = "<!-- pr-file-impact-summary:end -->";
 
 const STATUS_ORDER = [
   "added",
@@ -47,6 +49,14 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
 }
 
 function removeExistingGeneratedSection(body = "") {
+  const legacyStartIndex = body.lastIndexOf(LEGACY_START_MARKER);
+  if (legacyStartIndex !== -1) {
+    const legacyEndIndex = body.indexOf(LEGACY_END_MARKER, legacyStartIndex);
+    if (legacyEndIndex !== -1) {
+      return body.slice(0, legacyStartIndex) + body.slice(legacyEndIndex + LEGACY_END_MARKER.length);
+    }
+  }
+
   const index = body.lastIndexOf(SECTION_HEADING);
   if (index === -1) {
     return body;
