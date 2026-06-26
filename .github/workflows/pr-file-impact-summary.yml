@@ -31,10 +31,16 @@ jobs:
           MAX_SUMMARY_FILES: "300"
         with:
           script: |
+            // Keep Markdown rendering in a separate file so this workflow only
+            // handles GitHub API access and PR body updates.
             const { renderUpdatedPrBody } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/render-pr-file-impact-summary.mjs`);
 
+            // Read repository and pull request information from the workflow event.
             const { owner, repo } = context.repo;
             const pull_number = context.payload.pull_request.number;
+
+            // Fetch every changed file in the PR. Pagination is required when a
+            // PR has more than 100 changed files.
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner,
               repo,
@@ -42,6 +48,8 @@ jobs:
               per_page: 100,
             });
 
+            // Build the next PR body from the current body and the latest file list.
+            // The renderer owns where and how the generated table is inserted.
             const currentBody = context.payload.pull_request.body ?? "";
             const maxFiles = Number.parseInt(process.env.MAX_SUMMARY_FILES ?? "300", 10);
             const body = renderUpdatedPrBody({
@@ -50,11 +58,14 @@ jobs:
               maxFiles: Number.isFinite(maxFiles) ? maxFiles : 300,
             });
 
+            // Avoid calling the update API when nothing changed. This prevents
+            // unnecessary PR edit events and keeps the Actions history quieter.
             if (body === currentBody) {
               core.info("PR body is already up to date.");
               return;
             }
 
+            // Replace the PR body with the rendered version.
             await github.rest.pulls.update({
               owner,
               repo,

@@ -2,25 +2,12 @@ const SECTION_HEADING = "## 変更ファイル一覧（自動更新）";
 const LEGACY_START_MARKER = "<!-- pr-file-impact-summary:start -->";
 const LEGACY_END_MARKER = "<!-- pr-file-impact-summary:end -->";
 
-const STATUS_ORDER = [
-  "added",
-  "modified",
-  "renamed",
-  "removed",
-  "copied",
-  "changed",
-  "unchanged",
+const STATUS_SECTIONS = [
+  { status: "added", heading: "### 新規ファイル" },
+  { status: "modified", heading: "### 既存変更ファイル" },
+  { status: "renamed", heading: "### リネームファイル" },
+  { status: "removed", heading: "### 削除ファイル" },
 ];
-
-const STATUS_LABELS = {
-  added: "新規",
-  modified: "既存変更",
-  renamed: "リネーム",
-  removed: "削除",
-  copied: "コピー",
-  changed: "変更",
-  unchanged: "変更なし",
-};
 
 export function renderUpdatedPrBody({ body = "", files = [], maxFiles = 300 } = {}) {
   const block = renderSummaryBlock({ files, maxFiles });
@@ -31,7 +18,7 @@ export function renderUpdatedPrBody({ body = "", files = [], maxFiles = 300 } = 
 }
 
 export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
-  const sortedFiles = sortFiles(files);
+  const sortedFiles = sortFiles(files.filter((file) => !isTestFile(file.filename)));
   const visibleFiles = sortedFiles.slice(0, maxFiles);
   const omittedCount = Math.max(sortedFiles.length - visibleFiles.length, 0);
 
@@ -67,21 +54,35 @@ function removeExistingGeneratedSection(body = "") {
 
 function renderFileTable(files) {
   if (files.length === 0) {
-    return "変更ファイルはありません。";
+    return "表示対象の変更ファイルはありません。";
   }
 
   return [
-    "| 種別 | src直下 | ファイル | 変更量 |",
-    "|---|---|---|---:|",
+    ...STATUS_SECTIONS.flatMap(({ status, heading }) => {
+      const sectionFiles = files.filter((file) => file.status === status);
+      return renderFileSection(heading, sectionFiles);
+    }),
+    ...renderFileSection("### その他の変更ファイル", files.filter((file) => !isKnownStatus(file.status))),
+  ].join("\n");
+}
+
+function renderFileSection(heading, files) {
+  if (files.length === 0) {
+    return [];
+  }
+
+  return [
+    heading,
+    "",
+    "| src直下 | ファイル |",
+    "|---|---|",
     ...files.map((file) => {
-      const label = STATUS_LABELS[file.status] ?? file.status;
       const srcRoot = formatSrcRoot(file.filename);
       const filename = formatFilename(file);
-      const additions = Number.isFinite(file.additions) ? file.additions : 0;
-      const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} | +${additions} / -${deletions} |`;
+      return `| ${srcRoot} | ${filename} |`;
     }),
-  ].join("\n");
+    "",
+  ];
 }
 
 function formatFilename(file) {
@@ -122,6 +123,10 @@ function getBaseName(filename = "") {
   return index === -1 ? filename : filename.slice(index + 1);
 }
 
+function isTestFile(filename = "") {
+  return getBaseName(filename).includes(".test.");
+}
+
 function sortFiles(files) {
   return [...files].sort((a, b) => {
     const statusDiff = statusRank(a.status) - statusRank(b.status);
@@ -131,8 +136,12 @@ function sortFiles(files) {
 }
 
 function statusRank(status) {
-  const index = STATUS_ORDER.indexOf(status);
-  return index === -1 ? STATUS_ORDER.length : index;
+  const index = STATUS_SECTIONS.findIndex((section) => section.status === status);
+  return index === -1 ? STATUS_SECTIONS.length : index;
+}
+
+function isKnownStatus(status) {
+  return STATUS_SECTIONS.some((section) => section.status === status);
 }
 
 function inlineCode(value = "") {
