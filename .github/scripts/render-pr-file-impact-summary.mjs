@@ -1,5 +1,4 @@
-const START_MARKER = "<!-- pr-file-impact-summary:start -->";
-const END_MARKER = "<!-- pr-file-impact-summary:end -->";
+const SECTION_HEADING = "## 変更ファイル一覧（自動更新）";
 
 const STATUS_ORDER = [
   "added",
@@ -23,13 +22,9 @@ const STATUS_LABELS = {
 
 export function renderUpdatedPrBody({ body = "", files = [], maxFiles = 300 } = {}) {
   const block = renderSummaryBlock({ files, maxFiles });
+  const bodyWithoutGeneratedSection = removeExistingGeneratedSection(body);
+  const trimmedBody = bodyWithoutGeneratedSection.trimEnd();
 
-  if (body.includes(START_MARKER) && body.includes(END_MARKER)) {
-    const pattern = new RegExp(`${escapeRegExp(START_MARKER)}[\\s\\S]*?${escapeRegExp(END_MARKER)}`);
-    return body.replace(pattern, block);
-  }
-
-  const trimmedBody = body.trimEnd();
   return `${trimmedBody}${trimmedBody ? "\n\n" : ""}${block}\n`;
 }
 
@@ -39,10 +34,7 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
   const omittedCount = Math.max(sortedFiles.length - visibleFiles.length, 0);
 
   const lines = [
-    START_MARKER,
-    "## 変更ファイル一覧（自動更新）",
-    "",
-    "_GitHub Actions がPRの変更ファイル一覧から自動生成しています。画面・共通部品の意味判定は含めていません。_",
+    SECTION_HEADING,
     "",
     renderFileTable(visibleFiles),
   ];
@@ -51,8 +43,16 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
     lines.push("", `※ ${omittedCount}件は表示上限により省略しています。`);
   }
 
-  lines.push(END_MARKER);
   return lines.join("\n");
+}
+
+function removeExistingGeneratedSection(body = "") {
+  const index = body.lastIndexOf(SECTION_HEADING);
+  if (index === -1) {
+    return body;
+  }
+
+  return body.slice(0, index);
 }
 
 function renderFileTable(files) {
@@ -149,8 +149,4 @@ function escapeMarkdownLinkText(value = "") {
     .replaceAll("\\", "\\\\")
     .replaceAll("[", "\\[")
     .replaceAll("]", "\\]");
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
