@@ -87,24 +87,61 @@ function renderFileTable(files) {
   }
 
   return [
-    "| 種別 | ファイル | 変更量 |",
-    "|---|---|---:|",
+    "| 種別 | src直下 | ディレクトリ | ファイル | 変更量 |",
+    "|---|---|---|---|---:|",
     ...files.map((file) => {
       const label = STATUS_LABELS[file.status] ?? file.status;
+      const srcRoot = formatSrcRoot(file.filename);
+      const directory = inlineCode(getDirectoryName(file.filename));
       const filename = formatFilename(file);
       const additions = Number.isFinite(file.additions) ? file.additions : 0;
       const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${filename} | +${additions} / -${deletions} |`;
+      return `| ${escapeTableText(label)} | ${srcRoot} | ${directory} | ${filename} | +${additions} / -${deletions} |`;
     }),
   ].join("\n");
 }
 
 function formatFilename(file) {
+  const currentFilename = linkedFilename(file.filename, file.blob_url);
+
   if (file.status === "renamed" && file.previous_filename) {
-    return `${inlineCode(file.previous_filename)} -> ${inlineCode(file.filename)}`;
+    return `${inlineCode(getBaseName(file.previous_filename))} -> ${currentFilename}`;
   }
 
-  return inlineCode(file.filename);
+  return currentFilename;
+}
+
+function linkedFilename(filename, href) {
+  const text = escapeMarkdownLinkText(escapeTableText(getBaseName(filename)));
+
+  if (!href) {
+    return inlineCode(text);
+  }
+
+  return `[${text}](${escapeMarkdownLinkUrl(href)})`;
+}
+
+function formatSrcRoot(filename) {
+  return inlineCode(getSrcRoot(filename));
+}
+
+function getSrcRoot(filename = "") {
+  const parts = filename.split("/");
+  if (parts[0] !== "src") {
+    return "-";
+  }
+
+  return parts.length > 2 ? parts[1] : "src直下";
+}
+
+function getDirectoryName(filename = "") {
+  const index = filename.lastIndexOf("/");
+  return index === -1 ? "." : filename.slice(0, index);
+}
+
+function getBaseName(filename = "") {
+  const index = filename.lastIndexOf("/");
+  return index === -1 ? filename : filename.slice(index + 1);
 }
 
 function sortFiles(files) {
@@ -133,6 +170,17 @@ function escapeHtml(value = "") {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function escapeMarkdownLinkUrl(value = "") {
+  return String(value).replaceAll(")", "%29");
+}
+
+function escapeMarkdownLinkText(value = "") {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]");
 }
 
 function escapeRegExp(value) {
