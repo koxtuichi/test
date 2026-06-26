@@ -31,7 +31,7 @@ export function renderUpdatedPrBody({ body = "", files = [], maxFiles = 300 } = 
 }
 
 export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
-  const sortedFiles = sortFiles(files);
+  const sortedFiles = sortFiles(files.filter((file) => !isTestFile(file.filename)));
   const visibleFiles = sortedFiles.slice(0, maxFiles);
   const omittedCount = Math.max(sortedFiles.length - visibleFiles.length, 0);
 
@@ -67,19 +67,17 @@ function removeExistingGeneratedSection(body = "") {
 
 function renderFileTable(files) {
   if (files.length === 0) {
-    return "変更ファイルはありません。";
+    return "表示対象の変更ファイルはありません。";
   }
 
   return [
-    "| 種別 | src直下 | ファイル | 変更量 |",
-    "|---|---|---|---:|",
+    "| 種別 | src直下 | ファイル |",
+    "|---|---|---|",
     ...files.map((file) => {
       const label = STATUS_LABELS[file.status] ?? file.status;
       const srcRoot = formatSrcRoot(file.filename);
       const filename = formatFilename(file);
-      const additions = Number.isFinite(file.additions) ? file.additions : 0;
-      const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} | +${additions} / -${deletions} |`;
+      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} |`;
     }),
   ].join("\n");
 }
@@ -120,6 +118,10 @@ function getSrcRoot(filename = "") {
 function getBaseName(filename = "") {
   const index = filename.lastIndexOf("/");
   return index === -1 ? filename : filename.slice(index + 1);
+}
+
+function isTestFile(filename = "") {
+  return getBaseName(filename).includes(".test.");
 }
 
 function sortFiles(files) {
