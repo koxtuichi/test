@@ -87,16 +87,15 @@ function renderFileTable(files) {
   }
 
   return [
-    "| 種別 | src直下 | ディレクトリ | ファイル | 変更量 |",
-    "|---|---|---|---|---:|",
+    "| 種別 | src直下 | ファイル | 変更量 |",
+    "|---|---|---|---:|",
     ...files.map((file) => {
       const label = STATUS_LABELS[file.status] ?? file.status;
       const srcRoot = formatSrcRoot(file.filename);
-      const directory = inlineCode(getDirectoryName(file.filename));
       const filename = formatFilename(file);
       const additions = Number.isFinite(file.additions) ? file.additions : 0;
       const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${srcRoot} | ${directory} | ${filename} | +${additions} / -${deletions} |`;
+      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} | +${additions} / -${deletions} |`;
     }),
   ].join("\n");
 }
@@ -132,11 +131,6 @@ function getSrcRoot(filename = "") {
   }
 
   return parts.length > 2 ? parts[1] : "src直下";
-}
-
-function getDirectoryName(filename = "") {
-  const index = filename.lastIndexOf("/");
-  return index === -1 ? "." : filename.slice(0, index);
 }
 
 function getBaseName(filename = "") {
