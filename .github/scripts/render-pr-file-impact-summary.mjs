@@ -40,11 +40,9 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
 
   const lines = [
     START_MARKER,
-    "## 変更ファイルサマリ（自動更新）",
+    "## 変更ファイル一覧（自動更新）",
     "",
     "_GitHub Actions がPRの変更ファイル一覧から自動生成しています。画面・共通部品の意味判定は含めていません。_",
-    "",
-    renderCountTable(sortedFiles),
     "",
     renderFileTable(visibleFiles),
   ];
@@ -57,46 +55,21 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
   return lines.join("\n");
 }
 
-function renderCountTable(files) {
-  const counts = new Map();
-  for (const file of files) {
-    counts.set(file.status, (counts.get(file.status) ?? 0) + 1);
-  }
-
-  const rows = STATUS_ORDER
-    .filter((status) => counts.has(status))
-    .map((status) => `| ${STATUS_LABELS[status] ?? status} | ${counts.get(status)} |`);
-
-  const unknownRows = [...counts.entries()]
-    .filter(([status]) => !STATUS_ORDER.includes(status))
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([status, count]) => `| ${escapeTableText(status)} | ${count} |`);
-
-  return [
-    "| 種別 | 件数 |",
-    "|---|---:|",
-    ...rows,
-    ...unknownRows,
-    `| 合計 | ${files.length} |`,
-  ].join("\n");
-}
-
 function renderFileTable(files) {
   if (files.length === 0) {
     return "変更ファイルはありません。";
   }
 
   return [
-    "| 種別 | src直下 | ディレクトリ | ファイル | 変更量 |",
-    "|---|---|---|---|---:|",
+    "| 種別 | src直下 | ファイル | 変更量 |",
+    "|---|---|---|---:|",
     ...files.map((file) => {
       const label = STATUS_LABELS[file.status] ?? file.status;
       const srcRoot = formatSrcRoot(file.filename);
-      const directory = inlineCode(getDirectoryName(file.filename));
       const filename = formatFilename(file);
       const additions = Number.isFinite(file.additions) ? file.additions : 0;
       const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${srcRoot} | ${directory} | ${filename} | +${additions} / -${deletions} |`;
+      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} | +${additions} / -${deletions} |`;
     }),
   ].join("\n");
 }
@@ -132,11 +105,6 @@ function getSrcRoot(filename = "") {
   }
 
   return parts.length > 2 ? parts[1] : "src直下";
-}
-
-function getDirectoryName(filename = "") {
-  const index = filename.lastIndexOf("/");
-  return index === -1 ? "." : filename.slice(0, index);
 }
 
 function getBaseName(filename = "") {
