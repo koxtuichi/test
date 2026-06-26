@@ -40,11 +40,9 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
 
   const lines = [
     START_MARKER,
-    "## 変更ファイルサマリ（自動更新）",
+    "## 変更ファイル一覧（自動更新）",
     "",
     "_GitHub Actions がPRの変更ファイル一覧から自動生成しています。画面・共通部品の意味判定は含めていません。_",
-    "",
-    renderCountTable(sortedFiles),
     "",
     renderFileTable(visibleFiles),
   ];
@@ -55,30 +53,6 @@ export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
 
   lines.push(END_MARKER);
   return lines.join("\n");
-}
-
-function renderCountTable(files) {
-  const counts = new Map();
-  for (const file of files) {
-    counts.set(file.status, (counts.get(file.status) ?? 0) + 1);
-  }
-
-  const rows = STATUS_ORDER
-    .filter((status) => counts.has(status))
-    .map((status) => `| ${STATUS_LABELS[status] ?? status} | ${counts.get(status)} |`);
-
-  const unknownRows = [...counts.entries()]
-    .filter(([status]) => !STATUS_ORDER.includes(status))
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([status, count]) => `| ${escapeTableText(status)} | ${count} |`);
-
-  return [
-    "| 種別 | 件数 |",
-    "|---|---:|",
-    ...rows,
-    ...unknownRows,
-    `| 合計 | ${files.length} |`,
-  ].join("\n");
 }
 
 function renderFileTable(files) {
