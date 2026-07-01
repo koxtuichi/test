@@ -1,162 +1,113 @@
 const SECTION_HEADING = "## 変更ファイル一覧（自動更新）";
-const LEGACY_START_MARKER = "<!-- pr-file-impact-summary:start -->";
-const LEGACY_END_MARKER = "<!-- pr-file-impact-summary:end -->";
-
-const STATUS_ORDER = [
-  "added",
-  "modified",
-  "renamed",
-  "removed",
-  "copied",
-  "changed",
-  "unchanged",
-];
-
-const STATUS_LABELS = {
-  added: "新規",
-  modified: "既存変更",
-  renamed: "リネーム",
-  removed: "削除",
-  copied: "コピー",
-  changed: "変更",
-  unchanged: "変更なし",
+const FILE_STATUS = {
+  added: "added",
+  modified: "modified",
+  renamed: "renamed",
+  removed: "removed",
 };
 
-export function renderUpdatedPrBody({ body = "", files = [], maxFiles = 300 } = {}) {
-  const block = renderSummaryBlock({ files, maxFiles });
-  const bodyWithoutGeneratedSection = removeExistingGeneratedSection(body);
-  const trimmedBody = bodyWithoutGeneratedSection.trimEnd();
+export const renderUpdatedPrBody = ({ body = "", files = [] } = {}) => {
+  const displayTargetFiles = files
+    .filter((file) => isDisplayTargetFile(file))
+    .sort((a, b) => a.filename.localeCompare(b.filename));
+  const changedFileSummary = buildChangedFileSummaryBlock({ files: displayTargetFiles });
+  const bodyWithoutChangedFileList = removeExistingChangedFileList(body);
 
-  return `${trimmedBody}${trimmedBody ? "\n\n" : ""}${block}\n`;
-}
+  return `${bodyWithoutChangedFileList}${bodyWithoutChangedFileList ? "\n\n" : ""}${changedFileSummary}\n`;
+};
 
-export function renderSummaryBlock({ files = [], maxFiles = 300 } = {}) {
-  const sortedFiles = sortFiles(files);
-  const visibleFiles = sortedFiles.slice(0, maxFiles);
-  const omittedCount = Math.max(sortedFiles.length - visibleFiles.length, 0);
-
+const buildChangedFileSummaryBlock = ({ files = [] } = {}) => {
   const lines = [
     SECTION_HEADING,
     "",
-    renderFileTable(visibleFiles),
+    buildFileSections(files),
   ];
 
-  if (omittedCount > 0) {
-    lines.push("", `※ ${omittedCount}件は表示上限により省略しています。`);
-  }
-
   return lines.join("\n");
-}
+};
 
-function removeExistingGeneratedSection(body = "") {
-  const legacyStartIndex = body.lastIndexOf(LEGACY_START_MARKER);
-  if (legacyStartIndex !== -1) {
-    const legacyEndIndex = body.indexOf(LEGACY_END_MARKER, legacyStartIndex);
-    if (legacyEndIndex !== -1) {
-      return body.slice(0, legacyStartIndex) + body.slice(legacyEndIndex + LEGACY_END_MARKER.length);
-    }
-  }
-
+const removeExistingChangedFileList = (body = "") => {
   const index = body.lastIndexOf(SECTION_HEADING);
   if (index === -1) {
-    return body;
+    return body.trimEnd();
   }
 
-  return body.slice(0, index);
-}
+  return body.slice(0, index).trimEnd();
+};
 
-function renderFileTable(files) {
+const buildFileSections = (files) => {
   if (files.length === 0) {
-    return "変更ファイルはありません。";
+    return "表示対象の変更ファイルはありません。";
   }
+
+  const addedFiles = files.filter((file) => file.status === FILE_STATUS.added);
+  const modifiedFiles = files.filter((file) => file.status === FILE_STATUS.modified);
+  const renamedFiles = files.filter((file) => file.status === FILE_STATUS.renamed);
+  const removedFiles = files.filter((file) => file.status === FILE_STATUS.removed);
 
   return [
-    "| 種別 | src直下 | ファイル | 変更量 |",
-    "|---|---|---|---:|",
-    ...files.map((file) => {
-      const label = STATUS_LABELS[file.status] ?? file.status;
-      const srcRoot = formatSrcRoot(file.filename);
-      const filename = formatFilename(file);
-      const additions = Number.isFinite(file.additions) ? file.additions : 0;
-      const deletions = Number.isFinite(file.deletions) ? file.deletions : 0;
-      return `| ${escapeTableText(label)} | ${srcRoot} | ${filename} | +${additions} / -${deletions} |`;
-    }),
+    buildFileSection("### 新規ファイル", addedFiles),
+    buildFileSection("### 既存変更ファイル", modifiedFiles),
+    buildFileSection("### リネームファイル", renamedFiles),
+    buildFileSection("### 削除ファイル", removedFiles),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+};
+
+const buildFileSection = (heading, files) => {
+  if (files.length === 0) {
+    return "";
+  }
+
+  const rows = files.map((file) => {
+    const srcRoot = getSrcRootDirectoryName(file.filename);
+    const filename = formatFileName(file);
+    return `| ${srcRoot} | ${filename} |`;
+  });
+
+  return [
+    heading,
+    "",
+    "| src直下 | ファイル |",
+    "|---|---|",
+    ...rows,
   ].join("\n");
-}
+};
 
-function formatFilename(file) {
-  const currentFilename = linkedFilename(file.filename, file.blob_url);
+const formatFileName = (file) => {
+  const baseName = getBaseName(file.filename);
+  const currentFileName = file.blob_url
+    ? `[${baseName}](<${file.blob_url}>)`
+    : baseName;
 
-  if (file.status === "renamed" && file.previous_filename) {
-    return `${inlineCode(getBaseName(file.previous_filename))} -> ${currentFilename}`;
+  if (file.status === FILE_STATUS.renamed && file.previous_filename) {
+    return `${getBaseName(file.previous_filename)} -> ${currentFileName}`;
   }
 
-  return currentFilename;
-}
+  return currentFileName;
+};
 
-function linkedFilename(filename, href) {
-  const text = escapeMarkdownLinkText(escapeTableText(getBaseName(filename)));
-
-  if (!href) {
-    return inlineCode(text);
-  }
-
-  return `[${text}](${escapeMarkdownLinkUrl(href)})`;
-}
-
-function formatSrcRoot(filename) {
-  return inlineCode(getSrcRoot(filename));
-}
-
-function getSrcRoot(filename = "") {
+const getSrcRootDirectoryName = (filename) => {
   const parts = filename.split("/");
-  if (parts[0] !== "src") {
+  if (parts[0] !== "src" || parts.length <= 2) {
     return "-";
   }
 
-  return parts.length > 2 ? parts[1] : "src直下";
-}
+  return parts[1];
+};
 
-function getBaseName(filename = "") {
+const getBaseName = (filename = "") => {
   const index = filename.lastIndexOf("/");
   return index === -1 ? filename : filename.slice(index + 1);
-}
+};
 
-function sortFiles(files) {
-  return [...files].sort((a, b) => {
-    const statusDiff = statusRank(a.status) - statusRank(b.status);
-    if (statusDiff !== 0) return statusDiff;
-    return a.filename.localeCompare(b.filename);
-  });
-}
+const isDisplayTargetFile = (file) => {
+  const isTargetStatus =
+    file.status === FILE_STATUS.added ||
+    file.status === FILE_STATUS.modified ||
+    file.status === FILE_STATUS.renamed ||
+    file.status === FILE_STATUS.removed;
 
-function statusRank(status) {
-  const index = STATUS_ORDER.indexOf(status);
-  return index === -1 ? STATUS_ORDER.length : index;
-}
-
-function inlineCode(value = "") {
-  return `<code>${escapeHtml(value).replaceAll("|", "&#124;")}</code>`;
-}
-
-function escapeTableText(value = "") {
-  return String(value).replaceAll("|", "\\|");
-}
-
-function escapeHtml(value = "") {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function escapeMarkdownLinkUrl(value = "") {
-  return String(value).replaceAll(")", "%29");
-}
-
-function escapeMarkdownLinkText(value = "") {
-  return String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll("[", "\\[")
-    .replaceAll("]", "\\]");
-}
+  return isTargetStatus && !getBaseName(file.filename).includes(".test.");
+};
