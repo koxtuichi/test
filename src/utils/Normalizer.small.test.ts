@@ -1,1 +1,1 @@
-export const normalizerTest = "base test file";
+export const normalizerTest = "modified test file";
