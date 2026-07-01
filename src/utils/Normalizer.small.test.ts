@@ -1,1 +1,1 @@
-export const normalizerTest = "base test file";
+export const normalizerTest = "base test file changed for exclusion";
